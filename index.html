@@ -423,11 +423,18 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
    Project Settings -> API -> Project URL / anon public key
    ===================================================================== */
 const SUPABASE_URL = 'https://brvqrasnjnqihxrvtgks.supabase.co';
-const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJydnFyYXNuam5xaWh4cnZ0Z2tzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU5NzQyOTMsImV4cCI6MjEwMTU1MDI5M30.SHTstTnHTNVXLuFXbPH4JWL8O0oq-y-ggxdFwZtMYb8';
 /* ===================================================================== */
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const CHECKOUT_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/create-checkout-session`;
+
+/* =====================================================================
+   Stripe Payment Links (no Edge Function needed for checkout creation)
+   MEMBER_LINK is set. Paste your PHP 3,999 non-member link into
+   NONMEMBER_LINK below once you have it from Stripe.
+   ===================================================================== */
+const MEMBER_LINK = 'https://buy.stripe.com/28E4gyfTc0sAfNtgskgYU01';
+const NONMEMBER_LINK = 'https://buy.stripe.com/8x27sKayS4IQ6cTb80gYU02';
 
 const show = id => {
   ['step1','step2','step4'].forEach(s => document.getElementById(s).hidden = (s !== id));
@@ -477,16 +484,13 @@ window.goPay = async function(evt){
     document.getElementById('pay-amount').textContent = tier === 'member' ? 'PHP 1,999' : 'PHP 3,999';
     show('step2');
 
-    // Ask the Edge Function to create a Stripe Checkout Session, then redirect
-    const resp = await fetch(CHECKOUT_FUNCTION_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: userId, tier, email })
-    });
-    const session = await resp.json();
-    if(!resp.ok || !session.url){ throw new Error(session.error || 'Could not start checkout.'); }
+    // Hand off straight to the Stripe Payment Link for this tier.
+    // client_reference_id lets the webhook match this payment back to
+    // this exact registration row; prefilled_email saves them retyping it.
+    const baseLink = tier === 'member' ? MEMBER_LINK : NONMEMBER_LINK;
+    const payUrl = `${baseLink}?client_reference_id=${encodeURIComponent(userId)}&prefilled_email=${encodeURIComponent(email)}`;
 
-    window.location.href = session.url; // hand off to Stripe's hosted checkout page
+    window.location.href = payUrl; // hand off to Stripe's hosted payment page
   }catch(e){
     show('step1');
     err.textContent = e.message || 'Something went wrong. Please try again.';
